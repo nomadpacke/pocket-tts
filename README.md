@@ -5,7 +5,7 @@
 A lightweight text-to-speech (TTS) application designed to run efficiently on CPUs.
 Forget about the hassle of using GPUs and web APIs serving TTS models. With Kyutai's Pocket TTS, generating audio is just a pip install and a function call away.
 
-Supports Python 3.10, 3.11, 3.12, 3.13 and 3.14. Requires PyTorch 2.5+. Does not require the gpu version of PyTorch.
+Supports Python 3.10, 3.11, 3.12, 3.13 and 3.14. Built on Modular MAX; runs entirely on CPU.
 
 [🔊 Demo](https://kyutai.org/pocket-tts) | 
 [🐱‍💻GitHub Repository](https://github.com/kyutai-labs/pocket-tts) | 
@@ -124,8 +124,8 @@ voice_state = tts_model.get_state_for_audio_prompt(
     # or "hf://kyutai/tts-voices/expresso/ex01-ex02_default_001_channel2_198s.wav"
 )
 audio = tts_model.generate_audio(voice_state, "Hello world, this is a test.")
-# Audio is a 1D torch tensor containing PCM data.
-scipy.io.wavfile.write("output.wav", tts_model.sample_rate, audio.numpy())
+# Audio is a 1D numpy array containing PCM data.
+scipy.io.wavfile.write("output.wav", tts_model.sample_rate, audio)
 ```
 
 You can have multiple voice states around if

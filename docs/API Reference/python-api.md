@@ -26,7 +26,7 @@ voice_state = tts_model.get_state_for_audio_prompt(
 audio = tts_model.generate_audio(voice_state, "Hello world, this is a test.")
 
 # Save to file
-scipy.io.wavfile.write("output.wav", tts_model.sample_rate, audio.numpy())
+scipy.io.wavfile.write("output.wav", tts_model.sample_rate, audio)
 ```
 
 ## Core Classes
@@ -98,7 +98,7 @@ print(f"Sample rate: {model.sample_rate} Hz")
 Extract model state for a given audio file or URL (voice cloning), or load from a .safetensors file.
 
 **Parameters:**
-- `audio_conditioning` (Path | str | torch.Tensor): Audio or .safetensors file path, URL, or tensor
+- `audio_conditioning` (Path | str | np.ndarray): Audio or .safetensors file path, URL, or numpy array
 - `truncate` (bool): Whether to truncate the audio (default: False)
 
 **Returns:**
@@ -136,7 +136,7 @@ Generate complete audio tensor from text input.
 - `copy_state` (bool): Whether to copy the state (default: True)
 
 **Returns:**
-- `torch.Tensor`: Audio 1D tensor with shape [samples]
+- `np.ndarray`: Audio 1D float32 array with shape [samples]
 
 **Example:**
 ```python
@@ -160,7 +160,7 @@ Generate audio streaming chunks from text input.
 **Parameters:** Same as `generate_audio()`
 
 **Yields:**
-- `torch.Tensor`: Audio chunks with shape [samples]
+- `np.ndarray`: Audio chunks with shape [samples]
 
 **Example:**
 ```python
@@ -202,7 +202,7 @@ model_state_for_voice = model.get_state_for_audio_prompt(
 # Export to safetensors for fast loading later
 export_model_state(model_state_for_voice, "my_voice.safetensors")
 
-# Quite fast, it's just loading the tensors without running any pytorch code
+# Quite fast, it's just loading the tensors without running any model code
 model_state_for_voice_copy = model.get_state_for_audio_prompt("my_voice.safetensors")
 ```
 
@@ -233,8 +233,8 @@ funny_audio = model.generate_audio(voices["funny"], "Good morning.")
 
 ```python
 from pocket_tts import TTSModel
+import numpy as np
 import scipy.io.wavfile
-import torch
 
 model = TTSModel.load_model()
 
@@ -252,8 +252,8 @@ for text in texts:
     audios.append(audio)
 
 # Concatenate all audio
-full_audio = torch.cat(audios, dim=0)
-scipy.io.wavfile.write("batch_output.wav", model.sample_rate, full_audio.numpy())
+full_audio = np.concatenate(audios, axis=0)
+scipy.io.wavfile.write("batch_output.wav", model.sample_rate, full_audio)
 ```
 
 ### Streaming to File

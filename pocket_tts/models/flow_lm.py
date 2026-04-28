@@ -10,9 +10,9 @@ from max.nn import Module
 from typing_extensions import Self
 
 from pocket_tts.conditioners.text import LUTConditioner
-from pocket_tts.modules.mimi_transformer import StreamingTransformer, _LayerNorm, _LinearNoBias
+from pocket_tts.modules.mimi_transformer import StreamingTransformer, _LayerNorm
 from pocket_tts.modules.mlp import SimpleMLPAdaLN
-from pocket_tts.modules.transformer import _LinearNoBias as _LinearNoBiasNoBias  # noqa: F401
+from pocket_tts.modules.transformer import _LinearNoBias
 from pocket_tts.utils.config import FlowLMConfig
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,7 @@ class FlowLMModel(Module):
         _ = self.transformer(audio_cond, model_state)
 
     def backbone_run_gen_step(
-        self, backbone_input: TensorValue, model_state, noise: TensorValue
+        self, backbone_input: TensorValue, model_state, noise: TensorValue, num_steps: int = 1
     ) -> tuple[TensorValue, TensorValue]:
         """One autoregressive step.
 
@@ -157,10 +157,12 @@ class FlowLMModel(Module):
             model_state: kv-cache state for the transformer.
             noise: pre-sampled (1, ldim) Gaussian noise. Caller scales by
                 temperature/clamp before passing in.
+            num_steps: Number of LSD decode iterations (matches the legacy
+                ``lsd_decode_steps`` parameter).
 
         Returns:
-            (next_latent, eos_logit) — `eos_logit` is the raw logit; the caller
-            applies the threshold.
+            (next_latent, eos_logit) — ``eos_logit`` is the raw logit; the
+            caller applies the threshold.
         """
         is_nan = ops.is_nan(backbone_input)
         bos_b = ops.broadcast_to(self.bos_emb, shape=backbone_input.shape)
@@ -174,16 +176,29 @@ class FlowLMModel(Module):
         # transformer_out shape: (1, 1, dim) — squeeze the sequence dim.
         transformer_last = ops.squeeze(transformer_out, 1)  # (1, dim)
         eos_logit = self.out_eos(transformer_last)  # (1, 1)
-        next_latent = lsd_decode_one_step(self.flow_net, transformer_last, noise)
+        next_latent = lsd_decode(self.flow_net, transformer_last, noise, num_steps=num_steps)
         return next_latent, eos_logit
 
 
-def lsd_decode_one_step(
-    flow_net: SimpleMLPAdaLN, cond: TensorValue, x_0: TensorValue
+def lsd_decode(
+    flow_net: SimpleMLPAdaLN, cond: TensorValue, x_0: TensorValue, num_steps: int = 1
 ) -> TensorValue:
-    """Single LSD step (num_steps == 1). Returns the predicted x_1."""
+    """Lagrangian Self Distillation decode loop (graph-built; static ``num_steps``).
+
+    Mirrors the legacy ``lsd_decode`` semantics:
+
+        for i in range(num_steps):
+            s, t = i / num_steps, (i + 1) / num_steps
+            current += v_t(s, t, current) / num_steps
+    """
     device = x_0.device
-    s = ops.broadcast_to(ops.constant(0.0, x_0.dtype, device), shape=(x_0.shape[0], 1))
-    t = ops.broadcast_to(ops.constant(1.0, x_0.dtype, device), shape=(x_0.shape[0], 1))
-    flow_dir = flow_net(cond, s, t, x_0)
-    return x_0 + flow_dir
+    current = x_0
+    for i in range(num_steps):
+        s_val = float(i) / num_steps
+        t_val = float(i + 1) / num_steps
+        s = ops.broadcast_to(ops.constant(s_val, x_0.dtype, device), shape=(x_0.shape[0], 1))
+        t = ops.broadcast_to(ops.constant(t_val, x_0.dtype, device), shape=(x_0.shape[0], 1))
+        flow_dir = flow_net(cond, s, t, current)
+        scaled = flow_dir * ops.constant(1.0 / num_steps, x_0.dtype, device)
+        current = current + scaled
+    return current

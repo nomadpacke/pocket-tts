@@ -8,19 +8,14 @@ without renames.
 from __future__ import annotations
 
 from max.dtype import DType
-from max.graph import DeviceRef, TensorValue, ops
+from max.graph import DeviceRef, TensorValue, Weight, ops
 from max.nn import Module
 from typing_extensions import Self
 
 from pocket_tts.modules.layer_scale import LayerScale
-from pocket_tts.modules.mlp import (
-    LayerNorm as _MlpLayerNorm,  # not used; we use a separate impl below
-)
 from pocket_tts.modules.rope import RotaryEmbedding
 from pocket_tts.modules.transformer import StreamingMultiheadAttention, _LinearNoBias
 from pocket_tts.utils.config import FlowLMTransformerConfig
-
-del _MlpLayerNorm  # imported only to avoid name collision; the layer below uses its own
 
 
 class _LayerNorm(Module):
@@ -30,8 +25,6 @@ class _LayerNorm(Module):
         super().__init__()
         self.channels = channels
         self.eps = eps
-        from max.graph import Weight
-
         self.weight = Weight("weight", dtype, [channels], device=DeviceRef.CPU())
         self.bias = Weight("bias", dtype, [channels], device=DeviceRef.CPU())
 

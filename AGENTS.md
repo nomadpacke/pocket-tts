@@ -105,9 +105,9 @@ This is a pure Python package with Rust extensions in `training/rust_exts/audio_
 
 - **Thread Safety**: The code is NOT thread-safe. Server mode does not support concurrent requests.
 - **Batching**: Batch size is always 1. No batching support currently.
-- **Device**: Defaults to CPU. GPU does not provide speedup for this small model.
-- **Torch Threads**: `torch.set_num_threads(1)` in `tts_model.py` for optimal CPU performance
-- **dtype**: Models use float32 by default (configurable in YAML)
+- **Device**: CPU only. The model is compiled with Modular MAX targeting CPU.
+- **Compute backend**: All math runs through compiled MAX graphs (`pocket_tts.models.tts_model._compile_all`). Five graphs are compiled once on first use: text-prompt and audio-prompt update the flow-LM KV cache; the gen-step graph emits the next latent + EOS logit; mimi-encode/decode handle the audio codec.
+- **dtype**: Models use float32 internally. Checkpoints stored as bfloat16 are converted at load time.
 - **Beartype**: Runtime type checking is enabled via beartype claw in `__init__.py`
 
 ### Adding Features
@@ -129,8 +129,10 @@ The `download_if_necessary()` utility handles `hf://` URLs and caches locally.
 
 ## Common Gotchas
 
-1. **PyTorch Version**: Requires PyTorch 2.5+. Version 2.4.0 produces incorrect audio.
+1. **MAX**: The model is rewritten on top of Modular MAX (`max.nn`, `max.graph`). PyTorch is no longer a dependency.
 2. **Python Version**: Supports Python 3.10 through 3.14 (>= 3.10,<3.15).
 3. **uv Python Preference**: Set to "only-managed" in pyproject.toml because system Python may lack headers.
-4. **CPU-Only PyTorch**: Uses PyTorch CPU index from `download.pytorch.org/whl/cpu` in uv config.
-5. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality.
+4. **Quantization**: `quantize=True` is currently not implemented (raises `NotImplementedError`).
+5. **Conv-transpose**: `ops.conv2d_transpose` does not lower on CPU when its filter is a `Weight`, so the SEANet decoder convtrs are implemented as two matmuls + concat (`_NativeConvTranspose1d` in `modules/conv.py`); only `kernel_size == 2 * stride` is supported, which matches every config in the repo.
+6. **Attention mask**: `softmax(where(mask, scores, -inf))` fuses into a NaN-producing kernel; the code uses `-1e30` instead.
+7. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality.

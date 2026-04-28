@@ -136,8 +136,8 @@ def test_voice_management():
 
 
 def test_batch_processing():
+    import numpy as np
     import scipy.io.wavfile
-    import torch
 
     from pocket_tts import TTSModel
 
@@ -157,5 +157,5 @@ def test_batch_processing():
         audios.append(audio)
 
     # Concatenate all audio
-    full_audio = torch.cat(audios, dim=0)
-    scipy.io.wavfile.write("batch_output.wav", model.sample_rate, full_audio.numpy())
+    full_audio = np.concatenate(audios, axis=0)
+    scipy.io.wavfile.write("batch_output.wav", model.sample_rate, full_audio)

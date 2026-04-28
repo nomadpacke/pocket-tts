@@ -26,9 +26,9 @@ import queue
 import statistics
 import threading
 import time
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterator
 
 import numpy as np
 import safetensors
@@ -217,9 +217,8 @@ class TTSModel:
         self._mimi_encode = None
         self._mimi_decode = None
 
-        # Lsd decode steps must equal 1 — we compile a single LSD step.
-        if self.lsd_decode_steps != 1:
-            raise NotImplementedError("Only lsd_decode_steps == 1 is supported in the MAX port")
+        if self.lsd_decode_steps < 1:
+            raise ValueError(f"lsd_decode_steps must be >= 1; got {self.lsd_decode_steps}")
 
         # Pre-cached weights registries (numpy arrays) for graph compilation.
         self._flow_lm_weights = self.flow_lm.state_dict()
@@ -524,10 +523,14 @@ class TTSModel:
         gen_input_type = TensorType(DType.float32, shape=[1, 1, self.flow_lm.ldim], device=device)
         noise_type = TensorType(DType.float32, shape=[1, self.flow_lm.ldim], device=device)
 
+        gen_num_steps = self.lsd_decode_steps
+
         def _gen_step_fn(backbone_input, *args):
             *state_inputs, noise = args
             state = _tuple_to_state(self._flow_lm_schema, state_inputs)
-            next_latent, eos_logit = flow_lm.backbone_run_gen_step(backbone_input, state, noise)
+            next_latent, eos_logit = flow_lm.backbone_run_gen_step(
+                backbone_input, state, noise, num_steps=gen_num_steps
+            )
             return (next_latent, eos_logit, *_state_to_tuple(self._flow_lm_schema, state))
 
         self._reset_weight_caches(flow_lm, mimi)

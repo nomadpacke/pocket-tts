@@ -12,6 +12,7 @@ def get_flow_lm_state_dict(path: Path) -> dict:
                 key.startswith("flow.w_s_t.")
                 or key == "condition_provider.conditioners.transcript_in_segment.learnt_padding"
                 or key == "condition_provider.conditioners.speaker_wavs.learnt_padding"
+                or key == "condition_provider.conditioners.self_wav.learnt_padding"
                 or key == "num_ema_updates"
             ):
                 # skip lookup table weights
@@ -20,6 +21,8 @@ def get_flow_lm_state_dict(path: Path) -> dict:
             if key == "condition_provider.conditioners.transcript_in_segment.embed.weight":
                 new_name = "conditioner.embed.weight"
             if key == "condition_provider.conditioners.speaker_wavs.output_proj.weight":
+                new_name = "speaker_proj_weight"
+            if key == "condition_provider.conditioners.self_wav.output_proj.weight":
                 new_name = "speaker_proj_weight"
             if key == "fuser.padding_value":
                 new_name = "bos_before_voice"
